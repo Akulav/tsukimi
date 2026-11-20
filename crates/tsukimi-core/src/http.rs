@@ -1,8 +1,11 @@
 //! Shared outbound HTTP client used by providers, metadata and the stream proxy.
 
+use std::net::{IpAddr, SocketAddr};
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{anyhow, Result};
+use reqwest::dns::{Addrs, Name, Resolve, Resolving};
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use reqwest::{redirect, Client, Method};
 use serde::{Deserialize, Serialize};
@@ -47,9 +50,87 @@ pub struct JsResponseMeta {
     pub error: Option<String>,
 }
 
+/// Addresses outside the public internet: this computer, the home network, link-local and
+/// carrier-grade NAT (Tailscale) ranges. Provider modules are remote JavaScript, so nothing they
+/// ask for may reach them (a router's admin page, the app's own stream server, other local
+/// services), and neither may a redirect or a DNS answer that points there.
+pub fn is_blocked_ip(ip: IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(v4) => {
+            let o = v4.octets();
+            v4.is_loopback()
+                || v4.is_private()
+                || v4.is_link_local()
+                || v4.is_unspecified()
+                || v4.is_broadcast()
+                || (o[0] == 100 && (64..128).contains(&o[1]))
+        }
+        IpAddr::V6(v6) => {
+            let first = v6.segments()[0];
+            v6.is_loopback()
+                || v6.is_unspecified()
+                || (first & 0xfe00) == 0xfc00 // unique local fc00::/7
+                || (first & 0xffc0) == 0xfe80 // link-local fe80::/10
+                || v6.to_ipv4_mapped().is_some_and(|v4| is_blocked_ip(IpAddr::V4(v4)))
+        }
+    }
+}
+
+/// A URL that must not be fetched: not http(s), or a literal local address / `localhost`.
+/// Names that resolve to a local address are refused by [`PublicOnly`] at connect time.
+pub fn is_blocked_url(u: &url::Url) -> bool {
+    if !matches!(u.scheme(), "http" | "https") {
+        return true;
+    }
+    match u.host() {
+        Some(url::Host::Ipv4(ip)) => is_blocked_ip(IpAddr::V4(ip)),
+        Some(url::Host::Ipv6(ip)) => is_blocked_ip(IpAddr::V6(ip)),
+        Some(url::Host::Domain(d)) => {
+            let d = d.trim_end_matches('.').to_ascii_lowercase();
+            d == "localhost" || d.ends_with(".localhost")
+        }
+        None => true,
+    }
+}
+
+/// DNS resolver that drops local addresses, so a public name pointing at the home network
+/// (DNS rebinding) can't be used to reach it.
+struct PublicOnly;
+
+impl Resolve for PublicOnly {
+    fn resolve(&self, name: Name) -> Resolving {
+        let host = name.as_str().to_string();
+        Box::pin(async move {
+            let addrs: Vec<SocketAddr> =
+                tokio::net::lookup_host((host.as_str(), 0)).await?.filter(|a| !is_blocked_ip(a.ip())).collect();
+            if addrs.is_empty() {
+                let err: Box<dyn std::error::Error + Send + Sync> =
+                    format!("{host} has no public address (local addresses are blocked)").into();
+                return Err(err);
+            }
+            let it: Addrs = Box::new(addrs.into_iter());
+            Ok(it)
+        })
+    }
+}
+
+/// Follows up to 10 redirects, never to a blocked address.
+fn public_redirects() -> redirect::Policy {
+    redirect::Policy::custom(|attempt| {
+        if attempt.previous().len() >= 10 {
+            attempt.error("too many redirects")
+        } else if is_blocked_url(attempt.url()) {
+            attempt.error("redirect to a local address is blocked")
+        } else {
+            attempt.follow()
+        }
+    })
+}
+
 fn build(policy: redirect::Policy) -> Client {
     Client::builder()
         .redirect(policy)
+        .dns_resolver(Arc::new(PublicOnly))
         .connect_timeout(Duration::from_secs(10))
         .pool_idle_timeout(Duration::from_secs(90))
         .pool_max_idle_per_host(16)
@@ -95,7 +176,7 @@ pub fn header_map(pairs: &[(String, String)]) -> HeaderMap {
 
 impl Http {
     pub fn new() -> Self {
-        Self { follow: build(redirect::Policy::limited(10)), manual: build(redirect::Policy::none()) }
+        Self { follow: build(public_redirects()), manual: build(redirect::Policy::none()) }
     }
 
     pub fn client(&self) -> &Client {
@@ -121,6 +202,10 @@ impl Http {
 
     async fn js_request_inner(&self, req: &JsRequest) -> Result<(JsResponseMeta, String)> {
         let method = Method::from_bytes(req.method.as_deref().unwrap_or("GET").as_bytes())?;
+        let target = url::Url::parse(&req.url)?;
+        if is_blocked_url(&target) {
+            return Err(anyhow!("blocked: providers may only reach public http(s) addresses"));
+        }
         let client = if req.redirect.as_deref() == Some("manual") || req.redirect.as_deref() == Some("error") {
             &self.manual
         } else {

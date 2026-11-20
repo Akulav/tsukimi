@@ -228,18 +228,10 @@ pub struct StreamServer {
     pub addr: SocketAddr,
 }
 
-fn is_blocked_host(url: &url::Url) -> bool {
-    match url.host() {
-        Some(url::Host::Ipv4(ip)) => ip.is_loopback() || ip.is_private() || ip.is_link_local() || ip.is_unspecified(),
-        Some(url::Host::Ipv6(ip)) => ip.is_loopback() || ip.is_unspecified(),
-        Some(url::Host::Domain(d)) => d.eq_ignore_ascii_case("localhost") || d.ends_with(".localhost"),
-        None => true,
-    }
-}
-
 fn check_url(raw: &str) -> Result<url::Url> {
     let u = url::Url::parse(raw)?;
-    if !matches!(u.scheme(), "http" | "https") || is_blocked_host(&u) {
+    // The same rule as every outbound request (crate::http): public http(s) addresses only.
+    if crate::http::is_blocked_url(&u) {
         bail!("blocked upstream url");
     }
     Ok(u)
@@ -1584,6 +1576,22 @@ mod tests {
         assert!(check_url("http://127.0.0.1/x").is_err());
         assert!(check_url("http://192.168.1.2/x").is_err());
         assert!(check_url("file:///etc/passwd").is_err());
+        assert!(check_url("http://[fd00::1]/x").is_err());
+        assert!(check_url("http://[fe80::1]/x").is_err());
+        assert!(check_url("http://[::ffff:10.0.0.1]/x").is_err());
+        assert!(check_url("http://100.100.1.1/x").is_err());
+        assert!(check_url("http://LOCALHOST./x").is_err());
         assert!(check_url("https://cdn.example.com/x").is_ok());
+        assert!(check_url("https://8.8.8.8/x").is_ok());
+    }
+
+    #[tokio::test]
+    async fn provider_requests_cannot_reach_local_addresses() {
+        let http = crate::http::Http::new();
+        for url in ["http://127.0.0.1:1/", "http://192.168.0.1/", "http://localhost:8080/", "ftp://example.com/"] {
+            let req: crate::http::JsRequest = serde_json::from_value(serde_json::json!({ "url": url })).unwrap();
+            let (meta, _) = http.js_request(req).await;
+            assert!(meta.error.as_deref().is_some_and(|e| e.contains("blocked")), "{url}: {:?}", meta.error);
+        }
     }
 }

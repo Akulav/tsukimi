@@ -230,6 +230,12 @@ Requirements: a recent stable Rust toolchain and Node.js (for the Tauri CLI). Wi
 
 </details>
 
+## 📚 Documentation
+
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): how it works inside and where each piece of the code lives
+- [CHANGELOG.md](CHANGELOG.md): what changed in each version
+- [CLAUDE.md](CLAUDE.md): notes and rules for working on the code
+
 ## 🙏 Credits
 
 - **Made by Akulav**, inspired by [**dango** by serifpersia](https://github.com/serifpersia/dango). Tsukimi is a Rust

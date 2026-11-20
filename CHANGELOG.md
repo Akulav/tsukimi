@@ -7,6 +7,17 @@ pushed to `main`, GitHub Actions tags, builds and publishes the release.
 
 ## [Unreleased]
 
+## [4.2.1] - 2026-11-20
+
+### Security
+- Provider modules (remote JavaScript from the registry) can no longer reach this computer or the home network:
+  requests to `localhost`, private, link-local, carrier-grade NAT and unique-local IPv6 addresses are refused, and so
+  are redirects to them and names that resolve to them. The stream proxy uses the same rule (it now also blocks
+  unique-local / link-local IPv6 and CGNAT addresses).
+
+### Changed
+- Docs: a new `docs/ARCHITECTURE.md`, linked from the README.
+
 ## [4.2.0] - 2026-11-12
 
 ### Changed

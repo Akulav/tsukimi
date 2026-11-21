@@ -805,9 +805,21 @@ async function settingsView() {
       <input type="number" data-key="${key}" value="${s[key]}" min="${min}" max="${max}"></div>`
   const txt = (key, label, hint, ph = '') => `<div class="field"><div class="l"><b>${label}</b><span>${hint}</span></div>
       <input type="text" data-key="${key}" value="${esc(s[key] ?? '')}" placeholder="${esc(ph)}" spellcheck="false"></div>`
+  // Settings are split in tabs so each one fits on a screen; the last tab is remembered for this session.
+  const tab = S.settingsTab || 'playback'
+  const tabs = [
+    ['playback', 'Playback'],
+    ['storage', 'Downloads & cache'],
+    ['providers', 'Providers'],
+    ['updates', 'Updates'],
+  ]
+  const pane = (id) => `data-pane="${id}"${id === tab ? '' : ' hidden'}`
   view.innerHTML = `<div class="settings fade-in" id="settings">
     <h1>Settings</h1>
-    <div class="panel">
+    <div class="tabs" role="tablist">${tabs
+      .map(([id, label]) => `<button class="tab ${id === tab ? 'on' : ''}" role="tab" data-tab="${id}" aria-selected="${id === tab}">${label}</button>`)
+      .join('')}</div>
+    <div class="panel" ${pane('playback')}>
       <h3>Playback</h3>
       <div class="field"><div class="l"><b>Audio</b><span>Prefer subtitles or dubbed audio</span></div>
         <select data-key="mode"><option value="sub" ${s.mode === 'sub' ? 'selected' : ''}>Subbed</option><option value="dub" ${s.mode === 'dub' ? 'selected' : ''}>Dubbed</option></select></div>
@@ -819,6 +831,7 @@ async function settingsView() {
           .map((p) => `<option value="${esc(p.id)}" ${s.preferredProvider === p.id ? 'selected' : ''}>${esc(p.label)}</option>`)
           .join('')}</select></div>
     </div>
+    <div class="panes-2" ${pane('storage')}>
     <div class="panel">
       <h3>Downloads</h3>
       <div class="field"><div class="l"><b>Downloaded episodes</b><span>Kept until you delete them (Downloads page). Cache cleanup and "Clear" never touch them.</span></div>
@@ -839,12 +852,13 @@ async function settingsView() {
         <button class="btn small" data-cache="sweep">Clean up now</button><button class="btn small" data-cache="video" title="Downloads are kept">Clear video cache</button><button class="btn small" data-cache="all" title="Downloads are kept">Clear everything</button></div>
       <div style="margin-top:10px" class="foot">Cache: <span class="path">${esc(S.boot.paths.cache)}</span></div>
     </div>
-    <div class="panel">
+    </div>
+    <div class="panel" ${pane('updates')}>
       <h3>Updates</h3>
       ${sw('checkUpdates', 'Check for updates automatically', 'Shortly after start and every 6 hours. An Update button appears in the sidebar when there is one')}
       <div style="margin-top:12px" data-upd-panel></div>
     </div>
-    <div class="panel">
+    <div class="panel" ${pane('providers')}>
       <h3>Providers <span class="grow"></span><button class="btn small" id="prov-refresh"><i class="ic ic-refresh"></i>Update</button></h3>
       <table class="prov-table">${providers
         .map(
@@ -899,6 +913,17 @@ async function settingsView() {
       toast(String(err), true)
       b.disabled = false
     }
+  })
+  root.addEventListener('click', (e) => {
+    const t = e.target.closest('[data-tab]')
+    if (!t) return
+    S.settingsTab = t.dataset.tab
+    for (const b of $$('[data-tab]', root)) {
+      const on = b === t
+      b.classList.toggle('on', on)
+      b.setAttribute('aria-selected', on)
+    }
+    for (const el of $$('[data-pane]', root)) el.hidden = el.dataset.pane !== t.dataset.tab
   })
   root.addEventListener('click', async (e) => {
     const b = e.target.closest('[data-cache]')

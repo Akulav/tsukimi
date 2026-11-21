@@ -7,6 +7,14 @@ pushed to `main`, GitHub Actions tags, builds and publishes the release.
 
 ## [Unreleased]
 
+## [4.4.0] - 2026-11-21
+
+### Changed
+- **Centred pages that fit the window:** Search, Library, Downloads, Settings and About sit in a centred column that
+  grows with the window instead of hugging the left edge.
+- **Settings in tabs** (Playback, Downloads & cache, Providers, Updates), so each fits on one screen; the last tab you
+  opened is remembered while the app runs.
+
 ## [4.3.0] - 2026-11-21
 
 ### Changed

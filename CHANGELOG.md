@@ -7,6 +7,18 @@ pushed to `main`, GitHub Actions tags, builds and publishes the release.
 
 ## [Unreleased]
 
+## [4.3.0] - 2026-11-21
+
+### Changed
+- **New look:** Windows 11's dark style, like Akulav's other desktop apps: a flat #202020 window and side rail,
+  #2b2b2b layers with hairline borders, the Windows accent blue (black text on the Play button), 8 px corners and
+  Segoe UI. The poster and hero art keep their soft fades so titles stay readable.
+
+### Removed
+- Moving data from versions before 4.2 (the OS's per-user folders) and from dango into the install folder, and
+  renaming `dango.db`. Update to 4.2.1 first if you still have that data.
+- Unused code: the "remove from Continue watching" command nothing called, and the settings revision field.
+
 ## [4.2.1] - 2026-11-20
 
 ### Security

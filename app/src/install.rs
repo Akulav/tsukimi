@@ -41,11 +41,6 @@ pub fn first_run() -> bool {
             on_installed_start(&root);
             return true;
         }
-        // Versions before 4.2 installed into a fixed place: adopt or move that install.
-        if let Some(root) = adopt_legacy_install(&exe) {
-            on_installed_start(&root);
-            return true;
-        }
         let explicit =
             args.iter().position(|a| a == "--install-dir").and_then(|i| args.get(i + 1)).map(|d| expand_home(d));
         let folder = match explicit.or_else(remembered_folder) {
@@ -213,30 +208,6 @@ fn on_installed_start(root: &Path) {
     }
     #[cfg(target_os = "linux")]
     let _ = menu_entries(&program_in(root));
-}
-
-/// Linux before 4.2: `~/.local/share/tsukimi/tsukimi` (updated in place) — that folder simply becomes
-/// the install folder. macOS before 4.2: `~/Applications/Tsukimi.app` — moved into
-/// `~/Applications/Tsukimi/` (this process then starts the moved copy and ends).
-#[cfg(any(target_os = "linux", target_os = "macos"))]
-fn adopt_legacy_install(exe: &Path) -> Option<PathBuf> {
-    if cfg!(target_os = "linux") {
-        let d = default_folder();
-        if same_file(exe, &d.join("tsukimi")) {
-            return Some(d);
-        }
-        return None;
-    }
-    let old_app = home()?.join("Applications").join("Tsukimi.app");
-    if !exe.starts_with(&old_app) && !exe.canonicalize().ok()?.starts_with(old_app.canonicalize().ok()?) {
-        return None;
-    }
-    let folder = remembered_folder().unwrap_or_else(default_folder);
-    if install(exe, &folder).is_ok() && launch(&folder, &[]).is_ok() {
-        let _ = std::fs::remove_dir_all(&old_app);
-        std::process::exit(0);
-    }
-    None
 }
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]

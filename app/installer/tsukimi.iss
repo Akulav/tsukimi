@@ -12,9 +12,7 @@
 ; Before installing, an existing install is uninstalled silently (program, shortcuts, Apps entry -
 ; the library, settings and downloads in the install folder's data\ stay; only an
 ; uninstall where you answer "yes" deletes them), then the new version is installed and, with
-; /LAUNCH=1, started. An install of dango (the app's previous name, Tauri's NSIS setup) is removed
-; the same way; Tsukimi moves dango's library and downloads over on its first start.
-; The pictures come from scripts\installer-images.ps1.
+; /LAUNCH=1, started. The pictures come from scripts\installer-images.ps1.
 
 #ifndef AppVersion
   #define AppVersion "0.0.0"
@@ -102,9 +100,6 @@ Type: files; Name: "{app}\tsukimi.exe.old"
 Type: files; Name: "{app}\.tsukimi-install"
 
 [Code]
-const
-  DangoKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\dango';
-
 // A running Tsukimi from this folder is ended first.
 procedure StopRunning(Dir: String);
 var
@@ -121,33 +116,6 @@ end;
 function LaunchAfterUpdate(): Boolean;
 begin
   Result := WizardSilent and (ExpandConstant('{param:LAUNCH|0}') = '1');
-end;
-
-// dango (the previous name, installed by Tauri's NSIS setup into %LOCALAPPDATA%\dango): its program,
-// shortcuts and Apps entry go. Its data is NOT touched here (the old cache folder - with the
-// downloads - sits inside the same folder): Tsukimi moves it over on its first start.
-procedure RemoveDango();
-var
-  Dir: String;
-  Code: Integer;
-begin
-  if not RegQueryStringValue(HKCU, DangoKey, 'InstallLocation', Dir) then
-    Dir := ExpandConstant('{localappdata}\dango');
-  Dir := RemoveQuotes(Dir);
-  if not FileExists(Dir + '\dango.exe') and not RegKeyExists(HKCU, DangoKey) then
-    exit;
-  Log('Removing dango (the previous name of Tsukimi) from ' + Dir);
-  Exec('powershell.exe',
-       '-NoProfile -NonInteractive -Command "Get-Process dango -ErrorAction SilentlyContinue | Stop-Process -Force"',
-       '', SW_HIDE, ewWaitUntilTerminated, Code);
-  Sleep(500);
-  DeleteFile(Dir + '\dango.exe');
-  DeleteFile(Dir + '\uninstall.exe');
-  DeleteFile(ExpandConstant('{userprograms}\dango.lnk'));
-  DeleteFile(ExpandConstant('{userdesktop}\dango.lnk'));
-  RegDeleteKeyIncludingSubkeys(HKCU, DangoKey);
-  RegDeleteKeyIncludingSubkeys(HKCU, 'Software\Akulav\dango');
-  RemoveDir(Dir); // only when empty
 end;
 
 // An install that is already there is uninstalled first, silently: the old program, its shortcuts and
@@ -170,7 +138,6 @@ begin
         Log('The old uninstaller did not start; installing over it');
     end;
   end;
-  RemoveDango();
 end;
 
 procedure InitializeWizard();
@@ -186,25 +153,16 @@ end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
-  Data, Roaming, Local: String;
+  Data: String;
 begin
   if CurUninstallStep = usUninstall then
     StopRunning(ExpandConstant('{app}'));
   if (CurUninstallStep = usPostUninstall) and not UninstallSilent then
   begin
     Data := ExpandConstant('{app}\data');
-    // (versions before 4.2 kept the data in these per-user folders)
-    Roaming := ExpandConstant('{userappdata}\akulav\Tsukimi');
-    Local := ExpandConstant('{localappdata}\akulav\Tsukimi');
-    if (DirExists(Data) or DirExists(Roaming) or DirExists(Local)) and
+    if DirExists(Data) and
        (MsgBox(FmtMessage(CustomMessage('DeleteData'), [Data]), mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES) then
-    begin
       DelTree(Data, True, True, True);
-      DelTree(Roaming, True, True, True);
-      DelTree(Local, True, True, True);
-      RemoveDir(ExpandConstant('{userappdata}\akulav'));
-      RemoveDir(ExpandConstant('{localappdata}\akulav'));
-    end;
     RemoveDir(ExpandConstant('{app}'));
   end;
 end;

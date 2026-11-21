@@ -31,13 +31,7 @@ pub struct Settings {
     pub cf_user_agent: Option<String>,
     /// Look for a new Tsukimi release shortly after start and every 6 hours.
     pub check_updates: bool,
-    /// Schema revision for one-off migrations of stored settings. Missing in stored JSON
-    /// means 0 (field-level default), unlike the other fields which fall back to `Default`.
-    #[serde(default)]
-    pub rev: u32,
 }
-
-const REV: u32 = 1;
 
 impl Default for Settings {
     fn default() -> Self {
@@ -58,20 +52,12 @@ impl Default for Settings {
             cf_clearance: None,
             cf_user_agent: None,
             check_updates: true,
-            rev: REV,
         }
     }
 }
 
 impl Settings {
     pub fn normalized(mut self) -> Self {
-        if self.rev < 1 {
-            // rev 1: cache retention default went from 72h to 48h.
-            if self.cache_max_age_hours == 72 {
-                self.cache_max_age_hours = 48;
-            }
-        }
-        self.rev = REV;
         if self.mode != "dub" {
             self.mode = "sub".into();
         }
@@ -89,14 +75,16 @@ mod tests {
     use super::*;
 
     #[test]
-    fn migrates_old_retention_default() {
-        let s: Settings = serde_json::from_str(r#"{"cacheMaxAgeHours":72}"#).unwrap();
-        assert_eq!(s.normalized().cache_max_age_hours, 48);
-        let s: Settings = serde_json::from_str(r#"{"cacheMaxAgeHours":72,"rev":1}"#).unwrap();
-        assert_eq!(s.normalized().cache_max_age_hours, 72, "explicit choice after migration is kept");
+    fn missing_fields_take_defaults_and_values_are_clamped() {
         assert_eq!(Settings::default().normalized().predownload_episodes, 2);
-        // settings saved by dango (no checkUpdates) turn update checks on
         let s: Settings = serde_json::from_str(r#"{"mode":"dub","rev":1}"#).unwrap();
-        assert!(s.check_updates && s.mode == "dub");
+        assert!(s.check_updates && s.mode == "dub", "unknown fields are ignored");
+        let s: Settings = serde_json::from_str(
+            r#"{"mode":"x","cacheLimitMb":1,"downloadConcurrency":99,"disabledProviders":["AB"]}"#,
+        )
+        .unwrap();
+        let s = s.normalized();
+        assert_eq!((s.mode.as_str(), s.cache_limit_mb, s.download_concurrency), ("sub", 256, 12));
+        assert_eq!(s.disabled_providers, vec!["ab".to_string()]);
     }
 }

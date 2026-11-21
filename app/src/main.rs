@@ -184,11 +184,6 @@ fn continue_watching(d: State<'_, Arc<Tsukimi>>) -> Res<Value> {
 }
 
 #[tauri::command]
-fn remove_progress(d: State<'_, Arc<Tsukimi>>, id: i64) -> Res<()> {
-    d.remove_progress(id).map_err(err)
-}
-
-#[tauri::command]
 fn get_settings(d: State<'_, Arc<Tsukimi>>) -> Settings {
     d.get_settings()
 }
@@ -272,10 +267,6 @@ fn main() {
     if !install::first_run() {
         return;
     }
-    // Before logging opens its file: older data (OS per-user folders, dango) moves into the install folder.
-    if let Ok(p) = Paths::resolve() {
-        p.migrate_legacy();
-    }
     match Paths::resolve() {
         Ok(p) => tsukimi_core::init_logging_to(Some(&p.data.join("tsukimi.log"))),
         Err(_) => tsukimi_core::init_logging(),
@@ -341,7 +332,6 @@ fn main() {
             library_remove,
             save_progress,
             continue_watching,
-            remove_progress,
             get_settings,
             set_settings,
             providers,

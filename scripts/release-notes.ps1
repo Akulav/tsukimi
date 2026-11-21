@@ -24,7 +24,6 @@ $body += "`n`n---`n" +
     "| **Windows** 10/11 x64 | ``Tsukimi-setup.exe`` | setup wizard, per user, no admin rights |`n" +
     "| **macOS** Apple Silicon | ``tsukimi-macos-arm64`` | ``chmod +x tsukimi-macos-arm64`` and run it: it installs itself (~/Applications) |`n" +
     "| **Linux** x64 | ``tsukimi-linux-x64`` | ``chmod +x tsukimi-linux-x64`` and run it: it installs itself (app menu) |`n`n" +
-    "Already have Tsukimi? Use **Update** in the app (sidebar or Settings). Every file is listed in ``SHA256SUMS.txt``.`n" +
-    "Coming from dango? Install Tsukimi over it: your library, progress and downloads move over on the first start.`n`n" +
+    "Already have Tsukimi? Use **Update** in the app (sidebar or Settings). Every file is listed in ``SHA256SUMS.txt``.`n`n" +
     "Made by Akulav, inspired by dango by serifpersia."
 if ($OutFile) { [IO.File]::WriteAllText($OutFile, $body) } else { $body }

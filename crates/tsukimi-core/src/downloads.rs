@@ -207,8 +207,8 @@ impl Tsukimi {
                 }
             }
             me.refresh_disk_progress().await;
-            // Saved downloads finished before downloads were kept apart (dango, older versions)
-            // move to the downloads folder now.
+            // A saved download that finished but whose files are still in the cache (the app ended
+            // before `keep_files` ran) moves to the downloads folder now.
             for r in me.store.downloads().unwrap_or_default().into_iter().filter(|r| r.pinned) {
                 if r.total > 0 && r.done >= r.total {
                     me.keep(&r.key, true).await;

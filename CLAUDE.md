@@ -22,7 +22,6 @@ Cargo.toml                 workspace; [workspace.package].version is THE app ver
 CHANGELOG.md               release notes source: note changes under [Unreleased]
 crates/tsukimi-core/       all logic, no UI dependency
   src/lib.rs               `Tsukimi` facade + `Paths` (data / cache / downloads): services, background tasks, image localisation
-  src/migrate.rs           first start after the rename: moves dango's data + cache folders, dango.db -> tsukimi.db
   src/updater.rs           GitHub release check, SHA256SUMS-verified download, Windows setup / unix swap + relaunch
   src/js.rs                QuickJS runtime per provider + `__host` functions (http, sleep, cache, url, crypto, anilist)
   js/prelude.js            Node/WHATWG shims (fetch, URL, timers, TextEncoder, AbortSignal…) and the `ctx` object
@@ -48,7 +47,7 @@ app/                       Tauri shell (package + binary `tsukimi`)
   tauri.conf.json          window, CSP, icons (bundle inactive: releases use Inno Setup / plain binaries)
   installer/               tsukimi.iss (Windows setup = update), Info.plist (macOS app), wizard-*.bmp
   capabilities/default.json
-  ui/                      index.html, app.css, app.js (plain ES module), vendor/hls.min.js
+  ui/                      index.html, app.css (Windows 11 dark: flat layers, accent #60cdff, Segoe UI), app.js (plain ES module), vendor/hls.min.js
   icons/                   source.svg + the generated set (png, ico, icns)
 scripts/                   bump-version.ps1, release.ps1, release-notes.ps1, installer-images.ps1
 tools/js-vendor/           npm project that builds js/vendor.js and copies hls.js
@@ -70,7 +69,7 @@ cd tools/js-vendor && npm install && node build.mjs    # regenerate vendor.js + 
 ```
 
 `RUST_LOG=debug` enables verbose logs (provider console output appears at trace/debug).
-**All data lives in the install folder** (`Paths::resolve`: `<program folder>/data`, on macOS next to Tsukimi.app; owner's rule, like akulav-mc-launcher): library, settings, logs, cache, downloads and the webview's data (`data/webview`, set on the window in `main.rs`; macOS WKWebView can't be moved). `Paths::migrate_legacy` moves pre-4.2 data from the OS per-user folders (and dango's) into an installed copy's folder (marker `.tsukimi-install`, written by the setup / self-install). `TSUKIMI_DATA_DIR=<dir>` overrides.
+**All data lives in the install folder** (`Paths::resolve`: `<program folder>/data`, on macOS next to Tsukimi.app; owner's rule, like akulav-mc-launcher): library, settings, logs, cache, downloads and the webview's data (`data/webview`, set on the window in `main.rs`; macOS WKWebView can't be moved). The install folder has the marker `.tsukimi-install` (written by the setup / self-install). Moving pre-4.2 / dango data in was removed in 4.3.0: don't bring it back. `TSUKIMI_DATA_DIR=<dir>` overrides.
 On Windows git may not be on PATH: GitHub Desktop's copy is under `%LOCALAPPDATA%\GitHubDesktop\app-*\resources\app\git\cmd`.
 
 ## Releases and updates
@@ -85,7 +84,7 @@ On Windows git may not be on PATH: GitHub Desktop's copy is under `%LOCALAPPDATA
   remembered in `<config>/tsukimi/install-dir`). Renaming any of them
   breaks updates of installed copies (`updater::asset_name`).
 - The setup's `AppId` GUID in `tsukimi.iss` must never change. The setup removes an old dango NSIS install (program,
-  shortcuts, uninstall key) but never its data: the app migrates that (`migrate.rs`).
+  shortcuts, uninstall key) but never its data.
 - A copy whose exe path contains a `target` folder is "self built" and never replaces itself.
 
 ## How playback works (the important flow)
@@ -127,7 +126,7 @@ On Windows git may not be on PATH: GitHub Desktop's copy is under `%LOCALAPPDATA
      stopped job tells a pause from a failure.
    - **Permanence:** when a pinned row completes, `keep_files(src, true)` moves its files from `cache/` to
      `downloads/` (rename, or copy via a temp name across drives). Un-pinning moves them back. At start, complete pinned
-     rows still in the cache are moved (dango migration). The janitor and `clear_cache` only see `cache/`;
+     rows still in the cache are moved (the app ended before `keep_files` ran). The janitor and `clear_cache` only see `cache/`;
      `protected_files` additionally guards pinned rows' cache files while they download. `delete_download` removes both
      locations but skips files another pinned row shares.
    - A new `HlsJob` first stats every segment (downloads folder, then cache), so already-downloaded episodes show as

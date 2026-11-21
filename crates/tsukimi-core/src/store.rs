@@ -265,12 +265,6 @@ impl Store {
         Ok(rows.filter_map(|r| r.ok()).collect())
     }
 
-    pub fn remove_progress(&self, id: i64) -> Result<()> {
-        let c = self.conn.lock();
-        c.execute("DELETE FROM progress WHERE anilist_id = ?1", params![id])?;
-        Ok(())
-    }
-
     // ---- downloads ----
     fn map_download(r: &rusqlite::Row) -> rusqlite::Result<DownloadRecord> {
         Ok(DownloadRecord {

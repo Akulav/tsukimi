@@ -6,7 +6,6 @@ pub mod downloads;
 pub mod http;
 pub mod janitor;
 pub mod js;
-mod migrate;
 pub mod providers;
 pub mod registry;
 pub mod resolver;
@@ -54,28 +53,13 @@ impl Paths {
 
     /// `TSUKIMI_DATA_DIR`, else the `data/` folder in the folder Tsukimi lives in: the install folder
     /// the user chose (next to the program; on macOS next to `Tsukimi.app`), or next to a copy that
-    /// isn't installed. Never the OS's per-user app-data folders. Pure: [`Paths::migrate_legacy`]
-    /// brings older data in.
+    /// isn't installed. Never the OS's per-user app-data folders.
     pub fn resolve() -> Result<Self> {
         if let Ok(d) = std::env::var("TSUKIMI_DATA_DIR") {
             return Ok(Self::under(d));
         }
         let root = program_root().context("unknown program folder")?;
         Ok(Self::under(root.join("data")))
-    }
-
-    /// On the start of an installed copy: data from versions before 4.2 (the OS's per-user folders)
-    /// and from dango moves into the install folder, across drives too. Best effort.
-    pub fn migrate_legacy(&self) {
-        if std::env::var_os("TSUKIMI_DATA_DIR").is_some() || !program_root().is_some_and(|r| is_install_root(&r)) {
-            return;
-        }
-        if let Some(pd) = directories::ProjectDirs::from("dev", "akulav", "Tsukimi") {
-            migrate::from_os_folders(self, pd.data_dir(), pd.cache_dir(), &pd.data_local_dir().join("downloads"));
-        }
-        if let Some(old) = directories::ProjectDirs::from("dev", "dango", "dango") {
-            migrate::from_dango(self, old.data_dir(), old.cache_dir());
-        }
     }
 }
 
@@ -132,7 +116,6 @@ impl Tsukimi {
         std::fs::create_dir_all(&paths.cache)?;
         std::fs::create_dir_all(&paths.downloads)?;
         let db = paths.data.join("tsukimi.db");
-        migrate::rename_database(&paths.data, &db);
         let store = Arc::new(Store::open(&db)?);
         let settings: Settings =
             store.setting("settings").and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
@@ -438,10 +421,6 @@ impl Tsukimi {
             p.cover = p.cover.as_deref().map(|c| self.localize_url(c));
         }
         Ok(v)
-    }
-
-    pub fn remove_progress(&self, id: i64) -> Result<()> {
-        self.store.remove_progress(id)
     }
 
     // ---------------- providers & cache ----------------
